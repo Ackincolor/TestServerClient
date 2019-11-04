@@ -2,6 +2,9 @@ package com.ackincolor.testserverclient;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.text.format.Formatter;
@@ -14,14 +17,20 @@ import android.widget.Toast;
 import com.ackincolor.testserverclient.client.VoiceClient;
 import com.ackincolor.testserverclient.server.VoiceServer;
 
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+
 public class MainActivity extends AppCompatActivity {
 
     private TextView serverIp;
     private EditText serverPort,serverIp2,serverPort2;
-    private Button connect,startServer;
+    private Button connect,startServer,startrecording;
 
     private VoiceClient vc;
     private VoiceServer vs;
+
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -35,9 +44,11 @@ public class MainActivity extends AppCompatActivity {
 
         this.connect = findViewById(R.id.connect);
         this.startServer = findViewById(R.id.startServer);
+        this.startrecording = findViewById(R.id.startrecording);
 
         WifiManager wm = (WifiManager) getSystemService(WIFI_SERVICE);
         final String ip = Formatter.formatIpAddress(wm.getConnectionInfo().getIpAddress());
+
         this.serverIp.setText(ip);
 
         this.vc = new VoiceClient(ip, null,this);
@@ -71,5 +82,13 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+        this.startrecording.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Toast.makeText(getApplicationContext(),"START RECORDING",Toast.LENGTH_SHORT).show();
+
+            }
+        });
     }
+
 }

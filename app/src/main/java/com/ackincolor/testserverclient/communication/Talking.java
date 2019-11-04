@@ -4,12 +4,15 @@ import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
+import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
 
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -17,14 +20,27 @@ import java.net.Socket;
 
 public class Talking extends Thread {
     private Socket s;
+
+    private OutputStream os;
     private boolean running = true;
 
     static final int sampleFreq = 16000;
     private int channelConfig = AudioFormat.CHANNEL_IN_STEREO;
     static final int audioEncoding = AudioFormat.ENCODING_PCM_16BIT;
-    static final int streamType = AudioManager.STREAM_MUSIC;
-    static final int audioMode = AudioTrack.MODE_STREAM;
-    int minBufSize = AudioRecord.getMinBufferSize(sampleFreq, channelConfig, audioEncoding);
+
+    //test
+    private static final int RECORDER_SAMPLERATE = 8000;
+    private static final int RECORDER_CHANNELS = AudioFormat.CHANNEL_IN_MONO;
+    private static final int RECORDER_AUDIO_ENCODING = AudioFormat.ENCODING_PCM_16BIT;
+    private AudioRecord recorder = null;
+    private Thread recordingThread = null;
+    private Thread playingThread = null;
+    private boolean isRecording = false;
+    int bufferSize = AudioRecord.getMinBufferSize(RECORDER_SAMPLERATE,
+            RECORDER_CHANNELS, RECORDER_AUDIO_ENCODING);
+
+    int BufferElements2Rec = 1024; // want to play 2048 (2K) since 2 bytes we use only 1024
+    int BytesPerElement = 2;
 
     public Talking(Socket s) {
         this.s = s;
@@ -34,29 +50,78 @@ public class Talking extends Thread {
     public void run() {
         try{
 
-            byte [] audioBuffer = new byte[4096];
-
+            this.os = this.s.getOutputStream();
             //creates input stream readers to read incoming data
-            BufferedInputStream myBis = new BufferedInputStream(this.s.getInputStream());
-            DataInputStream myDis = new DataInputStream(myBis);
-            AudioTrack myAudioTrack = new AudioTrack(streamType, sampleFreq, channelConfig, audioEncoding, minBufSize, audioMode);
-            //InputStreamReader isr = new InputStreamReader(s.getInputStream());
+            recorder = new AudioRecord(MediaRecorder.AudioSource.MIC,
+                    RECORDER_SAMPLERATE, RECORDER_CHANNELS,
+                    RECORDER_AUDIO_ENCODING, BufferElements2Rec * BytesPerElement);
 
-            OutputStream os = s.getOutputStream();
-            while(running && myDis.available()>0){
-                /*isr.read(buffer);
-                System.out.println(new String(buffer));*/
-                os.write("OK".getBytes());
-                os.flush();
-                audioBuffer[audioBuffer.length] = myDis.readByte();
-                myAudioTrack.play();
-                myAudioTrack.write(audioBuffer, 0, audioBuffer.length);
+            recorder.startRecording();
+            isRecording = true;
+            recordingThread = new Thread(new Runnable() {
+                public void run() {
+                    writeAudioDataToFile();
+                }
+            }, "AudioRecorder Thread");
+            recordingThread.start();
+            playingThread = new Thread(new Runnable() {
+                public void run() {
+                    readAudioDataFromFile();
+                }
+            }, "AudioRecorder Thread");
+            playingThread.start();
+        } catch (IOException e) {
+            this.isRecording = false;
+            e.printStackTrace();
+        }
+    }
+    private void writeAudioDataToFile() {
+        // Write the output audio in byte
+
+        short sData[] = new short[BufferElements2Rec];
+        while (isRecording) {
+            // gets the voice output from microphone to byte format
+
+            recorder.read(sData, 0, BufferElements2Rec);
+            //System.out.println("Short wirting to file" + sData.toString());
+            try {
+                // // writes the data to file from buffer
+                // // stores the voice buffer
+                byte bData[] = short2byte(sData);
+                this.os.write(bData, 0, BufferElements2Rec * BytesPerElement);
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-            myDis.close();
-            myBis.close();
-            Log.d("DEBUG","closing reader");
+        }
+        try {
+            os.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            this.isRecording = false;
+        }
+    }
+    private void readAudioDataFromFile(){
+        MediaPlayer mp = new MediaPlayer();
+        try {
+            mp.setDataSource(ParcelFileDescriptor.fromSocket(s).getFileDescriptor());
+            mp.prepare();
+            mp.start();
+            while (isRecording) {
+
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+    private byte[] short2byte(short[] sData) {
+        int shortArrsize = sData.length;
+        byte[] bytes = new byte[shortArrsize * 2];
+        for (int i = 0; i < shortArrsize; i++) {
+            bytes[i * 2] = (byte) (sData[i] & 0x00FF);
+            bytes[(i * 2) + 1] = (byte) (sData[i] >> 8);
+            sData[i] = 0;
+        }
+        return bytes;
+
     }
 }
