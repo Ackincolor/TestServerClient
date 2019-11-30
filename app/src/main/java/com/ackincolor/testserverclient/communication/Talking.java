@@ -14,6 +14,7 @@ import java.io.DataInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
@@ -22,6 +23,7 @@ public class Talking extends Thread {
     private Socket s;
 
     private OutputStream os;
+    private InputStream is;
     private boolean running = true;
 
     static final int sampleFreq = 16000;
@@ -51,6 +53,7 @@ public class Talking extends Thread {
         try{
 
             this.os = this.s.getOutputStream();
+            this.is = this.s.getInputStream();
             //creates input stream readers to read incoming data
             recorder = new AudioRecord(MediaRecorder.AudioSource.MIC,
                     RECORDER_SAMPLERATE, RECORDER_CHANNELS,
@@ -71,7 +74,7 @@ public class Talking extends Thread {
             }, "AudioRecorder Thread");
             playingThread.start();
         } catch (IOException e) {
-            this.isRecording = false;
+            //this.isRecording = false;
             e.printStackTrace();
         }
     }
@@ -88,8 +91,12 @@ public class Talking extends Thread {
                 // // writes the data to file from buffer
                 // // stores the voice buffer
                 byte bData[] = short2byte(sData);
-                this.os.write(bData, 0, BufferElements2Rec * BytesPerElement);
+                this.os.write("ok\n".getBytes(), 0, 3);
+                this.os.flush();
+                Thread.sleep(1000);
             } catch (IOException e) {
+                e.printStackTrace();
+            } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
@@ -101,14 +108,13 @@ public class Talking extends Thread {
         }
     }
     private void readAudioDataFromFile(){
-        MediaPlayer mp = new MediaPlayer();
         try {
-            mp.setDataSource(ParcelFileDescriptor.fromSocket(s).getFileDescriptor());
-            mp.prepare();
-            mp.start();
-            while (isRecording) {
-
+            while(isRecording){
+                byte[] buffer = new byte[512];
+                this.is.read(buffer);
+                System.out.println(new String(buffer).concat(" from client"));
             }
+
         } catch (IOException e) {
             e.printStackTrace();
         }
